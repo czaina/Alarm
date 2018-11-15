@@ -34,6 +34,7 @@
 #include "stm32f3xx_hal.h"
 #include "stm32f3xx.h"
 #include "stm32f3xx_it.h"
+#include "IEC601601_1_8.h"
 
 /* USER CODE BEGIN 0 */
 extern uint16_t dac_lut[LUT_SIZE];
@@ -201,14 +202,14 @@ void SysTick_Handler(void)
 void DMA1_Channel3_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel3_IRQn 0 */
-	uint32_t source_it = hdma_dac1_ch1.Instance->CCR;
+/*	uint32_t source_it = hdma_dac1_ch1.Instance->CCR;
 	uint32_t flag_it = hdma_dac1_ch1.DmaBaseAddress->ISR;
   	if ((RESET != (flag_it & (DMA_FLAG_TC1 << hdma_dac1_ch1.ChannelIndex))) && (RESET != (source_it & DMA_IT_TC)))
   	{
   		HAL_TIM_Base_Start(&htim15);
   		HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
   	}
-
+*/
   /* USER CODE END DMA1_Channel3_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_dac1_ch1);
   /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
@@ -222,7 +223,7 @@ void DMA1_Channel3_IRQHandler(void)
 void TIM1_BRK_TIM15_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 0 */
-
+	IEC60601_TimerInteruptHandler();
   /* USER CODE END TIM1_BRK_TIM15_IRQn 0 */
   HAL_TIM_IRQHandler(&htim15);
   /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 1 */

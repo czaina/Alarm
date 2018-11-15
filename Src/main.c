@@ -41,7 +41,7 @@
 #include "stm32f3xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "IEC601601_1_8.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -96,6 +96,11 @@ void LUT_Prepare()
 	for(i=0;i<LUT_SIZE;i++)
 		dac_lut[i] = step*i;
 }
+
+void IEC60601_init2(void) {
+    IEC60601_InitSequencer();
+    IEC60601_InitToneCoefArray();
+};
 /* USER CODE END 0 */
 
 /**
@@ -128,7 +133,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_DAC1_Init();
+  //MX_DAC1_Init();
   MX_OPAMP2_Init();
   MX_USART2_UART_Init();
   MX_TIM15_Init();
@@ -138,17 +143,20 @@ int main(void)
   /* USER CODE BEGIN 2 */
   /* TIM Interrupts enable */
 
-  /* TIM3 enable counter */
-  //HAL_TIM_Base_Start(&htim15);
-  HAL_TIM_OC_Start(&htim15, TIM_CHANNEL_2);
+
   LUT_Prepare();
   __HAL_DAC_ENABLE(&hdac1, DAC_CHANNEL_1);
 
-  HAL_TIM_Base_Start(&htim15);
+  //HAL_TIM_Base_Start(&htim15);
  // HAL_DAC_Start(&hdac1,DAC_CHANNEL_1);
-  HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
+  IEC60601_init2();
+  //HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
   i=0;
   HAL_OPAMP_Start(&hopamp2);
+  /* TIM3 enable counter */
+  HAL_TIM_OC_Start(&htim15, TIM_CHANNEL_2);
+  HAL_TIM_Base_Start(&htim15);
+  IEC60601_TurnOnAlarm(HIGH,DRUG_DELIVERY);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -158,10 +166,10 @@ int main(void)
 	  HAL_Delay(300);
 	  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_lut[i]);
 	  //HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
-	  if (i<LUT_SIZE)
-		  i++;
-	  else
-		  i = 0;
+	  //if (i<LUT_SIZE)
+	  //i++;
+	  //else
+	//	  i = 0;
 	  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
   /* USER CODE END WHILE */
 
@@ -236,8 +244,8 @@ static void MX_NVIC_Init(void)
   HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(USART2_IRQn);
   /* TIM6_DAC1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(TIM6_DAC1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(TIM6_DAC1_IRQn);
+  //HAL_NVIC_SetPriority(TIM6_DAC1_IRQn, 0, 0);
+  //HAL_NVIC_EnableIRQ(TIM6_DAC1_IRQn);
 }
 
 /* DAC1 init function */
