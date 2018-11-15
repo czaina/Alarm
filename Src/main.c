@@ -148,6 +148,7 @@ int main(void)
  // HAL_DAC_Start(&hdac1,DAC_CHANNEL_1);
   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
   i=0;
+  HAL_OPAMP_Start(&hopamp2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
