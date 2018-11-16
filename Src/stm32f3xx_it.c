@@ -34,15 +34,14 @@
 #include "stm32f3xx_hal.h"
 #include "stm32f3xx.h"
 #include "stm32f3xx_it.h"
-#include "IEC601601_1_8.h"
 
 /* USER CODE BEGIN 0 */
+#include "IEC60601_1_8.h"
 extern uint16_t dac_lut[LUT_SIZE];
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_dac1_ch1;
-extern DAC_HandleTypeDef hdac1;
+extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim15;
 extern UART_HandleTypeDef huart2;
 
@@ -197,27 +196,6 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
-* @brief This function handles DMA1 channel3 global interrupt.
-*/
-void DMA1_Channel3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel3_IRQn 0 */
-/*	uint32_t source_it = hdma_dac1_ch1.Instance->CCR;
-	uint32_t flag_it = hdma_dac1_ch1.DmaBaseAddress->ISR;
-  	if ((RESET != (flag_it & (DMA_FLAG_TC1 << hdma_dac1_ch1.ChannelIndex))) && (RESET != (source_it & DMA_IT_TC)))
-  	{
-  		HAL_TIM_Base_Start(&htim15);
-  		HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
-  	}
-*/
-  /* USER CODE END DMA1_Channel3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_dac1_ch1);
-  /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel3_IRQn 1 */
-}
-
-/**
 * @brief This function handles TIM1 break and TIM15 interrupts.
 */
 void TIM1_BRK_TIM15_IRQHandler(void)
@@ -232,6 +210,20 @@ void TIM1_BRK_TIM15_IRQHandler(void)
 }
 
 /**
+* @brief This function handles TIM2 global interrupt.
+*/
+void TIM2_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM2_IRQn 0 */
+//	IEC60601_TimerInteruptHandler();
+  /* USER CODE END TIM2_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim2);
+  /* USER CODE BEGIN TIM2_IRQn 1 */
+
+  /* USER CODE END TIM2_IRQn 1 */
+}
+
+/**
 * @brief This function handles USART2 global interrupt / USART2 wake-up interrupt through EXT line 26.
 */
 void USART2_IRQHandler(void)
@@ -243,20 +235,6 @@ void USART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_IRQn 1 */
 
   /* USER CODE END USART2_IRQn 1 */
-}
-
-/**
-* @brief This function handles TIM6 global and DAC1 underrun error interrupts.
-*/
-void TIM6_DAC1_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM6_DAC1_IRQn 0 */
-
-  /* USER CODE END TIM6_DAC1_IRQn 0 */
-  HAL_DAC_IRQHandler(&hdac1);
-  /* USER CODE BEGIN TIM6_DAC1_IRQn 1 */
-
-  /* USER CODE END TIM6_DAC1_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */

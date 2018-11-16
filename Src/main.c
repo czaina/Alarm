@@ -41,15 +41,15 @@
 #include "stm32f3xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-#include "IEC601601_1_8.h"
+#include "IEC60601_1_8.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 DAC_HandleTypeDef hdac1;
-DMA_HandleTypeDef hdma_dac1_ch1;
 
 OPAMP_HandleTypeDef hopamp2;
 
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim15;
 
 UART_HandleTypeDef huart2;
@@ -62,11 +62,11 @@ uint16_t dac_lut[LUT_SIZE];
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_OPAMP2_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM15_Init(void);
+static void MX_TIM2_Init(void);
 static void MX_NVIC_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
@@ -74,7 +74,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-void LUT_Prepare();
+void LUT_Prepare(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -101,6 +101,31 @@ void IEC60601_init2(void) {
     IEC60601_InitSequencer();
     IEC60601_InitToneCoefArray();
 };
+
+void Test_Alarm(void)
+{
+	HAL_Delay(5000);
+  IEC60601_TurnOnAlarm(HIGH, DRUG_DELIVERY);
+	HAL_Delay(7);
+	IEC60601_TurnOnAlarm(HIGH, DRUG_DELIVERY);
+
+	HAL_Delay(5000);
+	IEC60601_TurnOnAlarm(HIGH, POWER_FAIL);
+	HAL_Delay(7);
+	IEC60601_TurnOnAlarm(HIGH, POWER_FAIL);
+
+	HAL_Delay(5000);
+
+	IEC60601_TurnOnAlarm(MEDIUM, DRUG_DELIVERY);
+	HAL_Delay(15);
+	IEC60601_TurnOnAlarm(MEDIUM, DRUG_DELIVERY);
+
+
+	HAL_Delay(5000);
+	IEC60601_TurnOnAlarm(LOW, LOW_ALARM);
+	HAL_Delay(20);
+	IEC60601_TurnOnAlarm(LOW, LOW_ALARM);
+}
 /* USER CODE END 0 */
 
 /**
@@ -132,11 +157,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  //MX_DAC1_Init();
+  MX_DAC1_Init();
   MX_OPAMP2_Init();
   MX_USART2_UART_Init();
   MX_TIM15_Init();
+  MX_TIM2_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
@@ -153,9 +178,11 @@ int main(void)
   //HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
   i=0;
   HAL_OPAMP_Start(&hopamp2);
-  /* TIM3 enable counter */
-  HAL_TIM_OC_Start(&htim15, TIM_CHANNEL_2);
-  HAL_TIM_Base_Start(&htim15);
+  /* TIM15 enable counter */
+	HAL_TIM_Base_Start_IT(&htim15);
+
+  //HAL_TIM_OC_Start(&htim15, TIM_CHANNEL_2);
+	//HAL_TIM_Base_Start_IT(&htim2);
   IEC60601_TurnOnAlarm(HIGH,DRUG_DELIVERY);
   /* USER CODE END 2 */
 
@@ -163,14 +190,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_Delay(300);
-	  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, dac_lut[i]);
-	  //HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
-	  //if (i<LUT_SIZE)
-	  //i++;
-	  //else
-	//	  i = 0;
-	  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+		Test_Alarm();
+
+//	  HAL_Delay(300);
+//	  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -243,9 +266,9 @@ static void MX_NVIC_Init(void)
   /* USART2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(USART2_IRQn);
-  /* TIM6_DAC1_IRQn interrupt configuration */
-  //HAL_NVIC_SetPriority(TIM6_DAC1_IRQn, 0, 0);
-  //HAL_NVIC_EnableIRQ(TIM6_DAC1_IRQn);
+  /* TIM2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(TIM2_IRQn);
 }
 
 /* DAC1 init function */
@@ -264,7 +287,7 @@ static void MX_DAC1_Init(void)
 
     /**DAC channel OUT1 config 
     */
-  sConfig.DAC_Trigger = DAC_TRIGGER_T15_TRGO;
+  sConfig.DAC_Trigger = DAC_TRIGGER_SOFTWARE;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
   {
@@ -290,6 +313,54 @@ static void MX_OPAMP2_Init(void)
   }
 
   if (HAL_OPAMP_SelfCalibrate(&hopamp2) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* TIM2 init function */
+static void MX_TIM2_Init(void)
+{
+
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+  TIM_OC_InitTypeDef sConfigOC;
+
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 2079;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -382,21 +453,6 @@ static void MX_USART2_UART_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-
-}
-
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 }
 

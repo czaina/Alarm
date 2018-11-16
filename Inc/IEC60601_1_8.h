@@ -48,7 +48,6 @@ void  IEC60601_init(void);
   void IEC60601_HighPriSequence (void);
   void IEC60601_MedPriSequence (void);
   void IEC60601_LowPriSequence (void);
-  void IEC60601_ (void);
     
 
  #endif

@@ -1,5 +1,5 @@
 /****************************************************************
- *  IEC601601-1-8 
+ *  IEC60601-1-8 
  *
  *   This modules provides the IEC Medical Alert tones.
  *
@@ -9,7 +9,7 @@
  *
  *   Port to mbed 2012 (WH)
  ****************************************************************/
-#include "IEC601601_1_8.h"
+#include "IEC60601_1_8.h"
 #include "stm32f3xx_hal.h"
 #include "stm32f3xx.h"
 #include "math.h"
@@ -21,7 +21,7 @@ DigitalOut TimInt(p19);
 DigitalOut SeqInt(p20);  
 #endif
  
-#define AMPL           150//200         // Output Amplitude
+#define AMPL           50//150//200         // Output Amplitude
 #define PI             3.1415926
 #define FSAMPLE        25000       // Timer  Reload Frequency               
   
@@ -53,16 +53,14 @@ extern DMA_HandleTypeDef hdma_dac1_ch1;
 
 
 Note_Type const _TuneSequence [][5] = {{C4,C4,C4,C4,C4},           // general
-                                       {C5,B4,A4,G4,F4},           // oxygen
-                                       {C4,A4,F4,A4,F4},           // ventilation
                                        {C4,E4,G4,G4,C5},           // cardiovascular
+                                       {C4,Fsharp4,C4,C4,Fsharp4}, // perfusion
+                                       {C4,A4,F4,A4,F4},           // ventilation
+                                       {C5,B4,A4,G4,F4},           // oxygen
                                        {C4,D4,E4,F4,G4},           // temperature
                                        {C5,D4,G4,C5,D4},           // drug_delivery
-                                       {C4,Fsharp4,C4,C4,Fsharp4}, // perfusion
                                        {C5,C4,C4,C5,C4},           // power_fail
-//                                      {E4,C4,0,0,0}};             // low_alarm
-                                       {E4,C4,C4,C4,C4}};          // low_alarm                                           
-
+                                       {E4,C4,C4,C4,C4}};          // low_alarm        
 
 double const _FreqArray[][5]= {{440.000005,880.00,1320.0,1760.00,2200.00},     // A4
                               {493.883306,987.76,1481.64,1975.5,2469.4},          // D46
@@ -111,7 +109,7 @@ void IEC60601_init(void) {
     IEC60601_InitSequencer();
     IEC60601_InitToneCoefArray();
 //    _ticker.attach_us(this, &IEC60601::_TimerInteruptHandler, 40);
-};
+}
 
 
 
@@ -278,10 +276,17 @@ void IEC60601_LowPriSequence (void) {
       case 781:
         _note_on = false;             // begin decay as note turns "off"    
         break;
-      case 816:                       // Low Prio does not repeat  
+			case 1041:
+        _active_note = _TuneSequence [_alarm_type][2];  // 3nd note of sequence
+        _note_level = 255;
+        IEC60601_TurnOnNote();
+        break;
+			case 1301:                       // Low Prio does not repeat  
+				_note_on = false;             // begin decay as note turns "off"    
         _sequence = 0;
         _mscount = 0;
     }
+
 }
 
 void IEC60601_TestSequence (void) {
@@ -393,8 +398,9 @@ void IEC60601_GenerateMultiTone (struct wave *t) {
 ////  DAC->DACR = ((output >> 10) & 0xFFC0) + 0x8000;  // make unsigned and output to DAC
 ///// Adapt to mbed !!!!
 //  LPC_DAC->DACR = ((output >> 10) & 0xFFC0) + 0x8000;  // make unsigned and output to DAC
-//  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 8) & 0xFFF0) + 0x8000);
-  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (output & 0x0FFF));
+//  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 10) & 0xFFC0) + 0x8000);
+  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 8) & 0xFFF0) + 0x8000);
+//  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (output & 0x0FFF));
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
   
   if ((output >= 0) && (output_old <= 0)) {  // zero crossing detect
