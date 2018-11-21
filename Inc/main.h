@@ -72,7 +72,6 @@
 /* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
-#define LUT_SIZE (20)
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -56,7 +56,6 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-uint16_t dac_lut[LUT_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,7 +64,6 @@ static void MX_GPIO_Init(void);
 static void MX_DAC1_Init(void);
 static void MX_OPAMP2_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM15_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_NVIC_Init(void);
 
@@ -74,57 +72,33 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-void LUT_Prepare(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-void LUT_Prepare()
-{
-	volatile int i;
-	volatile int max;
-	volatile float step = 4095/LUT_SIZE;
-/*
-	for (i=0;i<LUT_SIZE/2;i++)
-	{
-		dac_lut[i] = i;
-	}
-	max = LUT_SIZE/2;
-	for (i=max;i<LUT_SIZE;i++)
-	{
-		dac_lut[i] = max - (i - max);
-	}*/
-	for(i=0;i<LUT_SIZE;i++)
-		dac_lut[i] = step*i;
-}
-
-void IEC60601_init2(void) {
-    IEC60601_InitSequencer();
-    IEC60601_InitToneCoefArray();
-};
 
 void Test_Alarm(void)
 {
 	HAL_Delay(5000);
-  IEC60601_TurnOnAlarm(HIGH, DRUG_DELIVERY);
-	HAL_Delay(7);
 	IEC60601_TurnOnAlarm(HIGH, DRUG_DELIVERY);
-
+	HAL_Delay(7000);
+	IEC60601_TurnOnAlarm(HIGH, DRUG_DELIVERY);
+/*
 	HAL_Delay(5000);
 	IEC60601_TurnOnAlarm(HIGH, POWER_FAIL);
-	HAL_Delay(7);
+	HAL_Delay(7000);
 	IEC60601_TurnOnAlarm(HIGH, POWER_FAIL);
 
 	HAL_Delay(5000);
 
 	IEC60601_TurnOnAlarm(MEDIUM, DRUG_DELIVERY);
-	HAL_Delay(15);
+	HAL_Delay(15000);
 	IEC60601_TurnOnAlarm(MEDIUM, DRUG_DELIVERY);
 
 
 	HAL_Delay(5000);
 	IEC60601_TurnOnAlarm(LOW, LOW_ALARM);
-	HAL_Delay(20);
-	IEC60601_TurnOnAlarm(LOW, LOW_ALARM);
+	HAL_Delay(20000);
+	IEC60601_TurnOnAlarm(LOW, LOW_ALARM);*/
 }
 /* USER CODE END 0 */
 
@@ -136,7 +110,6 @@ void Test_Alarm(void)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	int i;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -160,40 +133,29 @@ int main(void)
   MX_DAC1_Init();
   MX_OPAMP2_Init();
   MX_USART2_UART_Init();
-  MX_TIM15_Init();
   MX_TIM2_Init();
 
   /* Initialize interrupts */
   MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
-  /* TIM Interrupts enable */
-
-
-  LUT_Prepare();
+#ifdef STM32F303x8 //AP31P
   __HAL_DAC_ENABLE(&hdac1, DAC_CHANNEL_1);
-
-  //HAL_TIM_Base_Start(&htim15);
- // HAL_DAC_Start(&hdac1,DAC_CHANNEL_1);
-  IEC60601_init2();
-  //HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*)dac_lut, LUT_SIZE, DAC_ALIGN_12B_R);
-  i=0;
   HAL_OPAMP_Start(&hopamp2);
-  /* TIM15 enable counter */
-	HAL_TIM_Base_Start_IT(&htim15);
+#else //Nucleo32 F303
+  __HAL_DAC_ENABLE(&hdac, DAC_CHANNEL_1);
+#endif
 
-  //HAL_TIM_OC_Start(&htim15, TIM_CHANNEL_2);
-	//HAL_TIM_Base_Start_IT(&htim2);
-  IEC60601_TurnOnAlarm(HIGH,DRUG_DELIVERY);
+  IEC60601_init();
+  /* TIM15 enable counter */
+  HAL_TIM_Base_Start_IT(&htim2);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		Test_Alarm();
-
-//	  HAL_Delay(300);
-//	  HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+	  Test_Alarm();
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
@@ -240,7 +202,7 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  HAL_RCC_MCOConfig(RCC_MCO, RCC_MCO1SOURCE_SYSCLK, RCC_MCODIV_128);
+  //HAL_RCC_MCOConfig(RCC_MCO, RCC_MCO1SOURCE_SYSCLK, RCC_MCODIV_128);
 
     /**Configure the Systick interrupt time 
     */
@@ -364,74 +326,6 @@ static void MX_TIM2_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-
-}
-
-/* TIM15 init function */
-static void MX_TIM15_Init(void)
-{
-
-  TIM_ClockConfigTypeDef sClockSourceConfig;
-  TIM_MasterConfigTypeDef sMasterConfig;
-  TIM_OC_InitTypeDef sConfigOC;
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig;
-
-  htim15.Instance = TIM15;
-  htim15.Init.Prescaler = 0;
-  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim15.Init.Period = 2079;
-  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim15.Init.RepetitionCounter = 0;
-  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  if (HAL_TIM_OC_Init(&htim15) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
-  sConfigOC.Pulse = 1;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_SET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_OC_ConfigChannel(&htim15, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim15, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  HAL_TIM_MspPostInit(&htim15);
 
 }
 

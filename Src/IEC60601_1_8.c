@@ -38,8 +38,12 @@ DigitalOut SeqInt(p20);
 
 Alarm_Type _alarm_type;
 Prio_Type _priority;
-unsigned int _sequence;
-unsigned int _mscount;
+volatile unsigned int _sequence;
+volatile unsigned int _mscount;
+volatile unsigned int _fall_begin;
+volatile unsigned int _rise_begin;
+volatile unsigned int _note_count;
+
 
 int _envelope;
 Note_Type _active_note;
@@ -47,20 +51,47 @@ bool _note_on;
 int _note_level;
 bool _envelope_on;
 bool _envelope_off;
-
-extern DAC_HandleTypeDef hdac1;
+#ifdef STM32F303x8 //AP31P
+	extern DAC_HandleTypeDef hdac1;
+#else //Nucleo32 F303
+	extern DAC_HandleTypeDef hdac;
+#endif
 extern DMA_HandleTypeDef hdma_dac1_ch1;
 
+#define HP_DT 150
+#define MP_DT 200
+#define LP_DT 200
+#define ___DT 0
 
-Note_Type const _TuneSequence [][5] = {{C4,C4,C4,C4,C4},           // general
-                                       {C4,E4,G4,G4,C5},           // cardiovascular
-                                       {C4,Fsharp4,C4,C4,Fsharp4}, // perfusion
-                                       {C4,A4,F4,A4,F4},           // ventilation
-                                       {C5,B4,A4,G4,F4},           // oxygen
-                                       {C4,D4,E4,F4,G4},           // temperature
-                                       {C5,D4,G4,C5,D4},           // drug_delivery
-                                       {C5,C4,C4,C5,C4},           // power_fail
-                                       {E4,C4,C4,C4,C4}};          // low_alarm        
+#define HP_ST 75
+#define MP_ST 200
+#define LP_ST 200
+#define ___ST 0
+
+Note_Type const _TuneSequence [][11] = {{C4,C4,C4,C4,C4,C4,C4,C4,C4,C4},                    // general
+                                       {C4,E4,G4,G4,C5,C4,E4,G4,G4,C5},                     // cardiovascular
+                                       {C4,Fsharp4,C4,C4,Fsharp4,C4,Fsharp4,C4,C4,Fsharp4}, // perfusion
+                                       {C4,A4,F4,A4,F4,C4,A4,F4,A4,F4},                     // ventilation
+                                       {C5,B4,A4,G4,F4,C5,B4,A4,G4,F4},                     // oxygen
+                                       {C4,D4,E4,F4,G4,C4,D4,E4,F4,G4},                     // temperature
+                                       {C5,D4,G4,C5,D4,C5,D4,G4,C5,D4},                     // drug_delivery
+                                       {C5,C4,C4,C5,C4,C5,C4,C4,C5,C4},                     // power_fail
+                                       {E4,C4,C4,C4,C4,E4,C4,C4,C4,C4}};                    // low_alarm
+//Three priority times
+int const _DurationTimes[3][11] = {{HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,HP_DT,___DT},// note 1..10 td time ms
+                                   {MP_DT,MP_DT,MP_DT,___DT},
+                                   {LP_DT,LP_DT,LP_DT,___DT}};
+
+int const _SpaceTimes[3][11] = {{HP_ST,HP_ST,(2*HP_ST+HP_DT),HP_ST,550,HP_ST,HP_ST,(2*HP_ST+HP_DT),HP_ST,HP_ST,___ST},// note 1..10 ts time ms
+                               {MP_ST,MP_ST,MP_ST,___ST},
+                               {LP_ST,LP_ST,LP_ST,___ST}};
+int const _NoteLevel[3][11] = {{170,255,255,255,255,255,255,255,255,255,0},//255 max level
+                               {170,255,255,0},
+                               {170,255,255,0}};
+
+int const _RiseTimes[3] = {(0.3*HP_DT),(0.3*MP_DT),(0.3*LP_DT)}; //ms
+
+int const _FallTimes[3] = {(HP_ST-0.3*HP_DT),(MP_ST-0.3*MP_DT),(LP_ST-0.3*LP_DT)}; //ms
 
 double const _FreqArray[][5]= {{440.000005,880.00,1320.0,1760.00,2200.00},     // A4
                               {493.883306,987.76,1481.64,1975.5,2469.4},          // D46
@@ -71,31 +102,6 @@ double const _FreqArray[][5]= {{440.000005,880.00,1320.0,1760.00,2200.00},     /
                               {739.988853,1479.980,2219.970,2959.960,3699.950},       // A4
                               {783.990880,1567.98,2351.97,3135.96, 3919.95},         // B4
                               {880.000009,1760.00, 2640.00,3520.00, 4400.00}};   // A5
-                              
-/*
-float const _FreqArray[][5]= {{261.625568,523.252,784.878,1046.50,1308.13},     // C4
-                              {293.664771,587.34,881.01,1174.7,1468.3},          // D4
-                              {329.62756,659.26,988.89,1318.52,1648.15},        // E4
-                              {349.228235,698.46,1047.69,1396.9,1746.15},        // F4
-                              {369.994427,739.98,1109.97,1479.96,1849.95},       // FSharp4
-                              {391.995440,784.00,1176.0,1568.0,1960.0},          // G4
-                              {440.000005,880.00,1320.0,1760.00,2200.00},       // A4
-                              {493.883306,987.76,1481.64,1975.5,2469.4},         // B4
-                              {523.251136,1046.50,1569.756,2093.00,2616.25}};   // C5
-                              
-
-float const _FreqArray[][5]= {{261.626,523.252,784.878,1046.50,1308.13},     // C4
-                              {293.67,587.34,881.01,1174.7,1468.3},          // D4
-                              {329.63,659.26,988.89,1318.52,1648.15},        // E4
-                              {349.23,698.46,1047.69,1396.9,1746.15},        // F4
-                              {369.99,739.98,1109.97,1479.96,1849.95},       // FSharp4
-                              {392.00,784.00,1176.0,1568.0,1960.0},          // G4
-                              {440.000,880.00,1320.0,1760.00,2200.00},       // A4
-                              {493.88,987.76,1481.64,1975.5,2469.4},         // B4
-                              //{517.251,1563.50,2610.756,3667.00,4713.25}};   // C5
-                              {523.251,1046.50,1569.756,2093.00,2616.25}};   // C5
-                              
-   */                          
       
 unsigned char _ToneWeights[] = {255,255,255,255,255};    // used for test and  
                                                          // adjusting harmonic levels
@@ -121,6 +127,9 @@ void IEC60601_TurnOnAlarm(Prio_Type priority, Alarm_Type alarm_type) {
   _mscount = 0;    
   _sequence = 1;
 
+  _rise_begin = 0;
+  _note_count = 0;
+  _fall_begin = _rise_begin + _RiseTimes[_priority] + _DurationTimes[_priority][_note_count];
 }
 
 void IEC60601_TurnOffAlarm(void) {
@@ -153,7 +162,7 @@ void IEC60601_InitSequencer(void) {
 
 
 void IEC60601_TurnOnNote(void) {
-  _envelope = 0;          
+  _envelope = 0;
   _note_on = true;
   _envelope_on = true;
 }
@@ -162,156 +171,29 @@ void IEC60601_TurnOffNote(void) {
   _note_on = false;
 }
 
+void IEC60601_Sequence (void) {
+	if (_mscount >= _rise_begin)
+	{
+        if (_DurationTimes[_priority][_note_count] == 0){
+            _sequence = 0;
+            return;//last note
+        }
 
-void IEC60601_HighPriSequence (void) {
-   
-   switch (_mscount) {
-      case 1:
-        _active_note = _TuneSequence [_alarm_type][0];  // 1rst note of sequence
-        _note_level = 170;
+		_active_note = _TuneSequence [_alarm_type][_note_count];  // n-th note of sequence
+        _note_level = _NoteLevel[_priority][_note_count];
         IEC60601_TurnOnNote();
-        break;      
-      case 145:                       // 145 ms (trise + tduration)
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 224:
-        _active_note = _TuneSequence [_alarm_type][1];  // 2nd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 368:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 447:
-        _active_note = _TuneSequence [_alarm_type][2];  // 3rd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 591:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 835:
-        _active_note = _TuneSequence [_alarm_type][3];  // 4th note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 979:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 1058:
-        _active_note = _TuneSequence [_alarm_type][4];  // 5th note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 1202:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-        
-      case 1250:                      // allows for fall time of envelope
-        if (_sequence == 2) {         // Done after one repeat 
-          _sequence = 0;
-          _mscount = 0;
-        }  
-        break;                  
-      case 1750:
-        if (_sequence == 1) {         // If this is the first time through, repeat
-          _sequence = 2;    
-        } 
-        _mscount = 0;
-        break;    
-   }
+        _rise_begin = _fall_begin + _SpaceTimes[_priority][_note_count];
+
+	}
+	if (_mscount >= _fall_begin)
+	{
+		_note_on = false;
+		_fall_begin = _rise_begin + _RiseTimes[_priority] + _DurationTimes[_priority][_note_count];
+		_note_count++;
+	}
 }
 
 
-void IEC60601_MedPriSequence (void) {
-
-   switch (_mscount) {
-      case 1:
-        _active_note = _TuneSequence [_alarm_type][0];
-        _note_level = 170;
-        IEC60601_TurnOnNote();
-        break;    
-      case 221:                       // 221 ms (trise(30) + tduration(190)+ start(1))
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 441:
-        _active_note = _TuneSequence [_alarm_type][1];  // 2nd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 661:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 881:
-        _active_note = _TuneSequence [_alarm_type][2];  // 3rd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 1101:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 1151:                      // allows for fall time of envelope 
-        _sequence = 0;                // Medium Prio does not repeat 
-        _mscount = 0;
-    }
-    
-}
-
-void IEC60601_LowPriSequence (void) {
-
-   switch (_mscount) {
-      case 1:
-        _active_note = _TuneSequence [_alarm_type][0];
-        _note_level = 170;
-        IEC60601_TurnOnNote();
-        break;     
-      case 261:                       // 261 ms (trise(35) + tduration(225))
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-      case 521:
-        _active_note = _TuneSequence [_alarm_type][1];  // 2nd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      case 781:
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-			case 1041:
-        _active_note = _TuneSequence [_alarm_type][2];  // 3nd note of sequence
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-			case 1301:                       // Low Prio does not repeat  
-				_note_on = false;             // begin decay as note turns "off"    
-        _sequence = 0;
-        _mscount = 0;
-    }
-
-}
-
-void IEC60601_TestSequence (void) {
-
-   switch (_mscount) {
-      case 1:
-//      _active_note = _TuneSequence [_alarm_type][0];
-        _note_level = 255;
-        IEC60601_TurnOnNote();
-        break;
-      
-      case 1000:             
-        _note_on = false;             // begin decay as note turns "off"    
-        break;
-
-      case 1035:
-
-         for (int i=0; i<5; i++) {    // Restore weights
-           _ToneWeights[i] = 255;
-         };
-        _sequence = 0;                // Test does not repeat  
-        _mscount = 0;
-        break;
-    }
-}
 
 void IEC60601_EnvelopeControl(void) {
 
@@ -320,22 +202,12 @@ void IEC60601_EnvelopeControl(void) {
          _envelope = _note_level;
      }
      else {
-        if (_priority == HIGH) {
-            _envelope += HP_RISE;        // high priority risetime control
-        }
-        else {
-          _envelope += MP_RISE;          // Medium priority risetime control
-        }
+    	 _envelope += _note_level/_RiseTimes[_priority];
      }
    }
-  else {
+  else {//_note_on == false
       if (_envelope > 0) {
-        if (_priority == HIGH) {
-            _envelope -= HP_FALL;        // high priority falltime control
-        }
-        else {
-          _envelope -= MP_FALL;          // Medium priority falltime control
-        }
+    	  _envelope -= _note_level/_FallTimes[_priority];
       }
   }
   if ((_envelope <= 0) && (!_note_on) && (_envelope_on) ) {
@@ -394,14 +266,14 @@ void IEC60601_GenerateMultiTone (struct wave *t) {
     output += ((t->y1 * env_weights) >> 8);      // sum fundamental and harmonics
     t++;                                      // increment structure pointer
   }
-
-////  DAC->DACR = ((output >> 10) & 0xFFC0) + 0x8000;  // make unsigned and output to DAC
-///// Adapt to mbed !!!!
-//  LPC_DAC->DACR = ((output >> 10) & 0xFFC0) + 0x8000;  // make unsigned and output to DAC
-//  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 10) & 0xFFC0) + 0x8000);
+#ifdef STM32F303x8 //AP31P
   HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 8) & 0xFFF0) + 0x8000);
-//  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (output & 0x0FFF));
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+#else //Nucleo32 F303
+  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_L, ((output >> 8) & 0xFFF0) + 0x8000);
+  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+#endif
+
   
   if ((output >= 0) && (output_old <= 0)) {  // zero crossing detect
      if (_envelope_off && (!_note_on)) {
@@ -432,7 +304,6 @@ void IEC60601_TimerInteruptHandler (void){
     if (_envelope_on) {
 //Oude code 
 //      _OutputTones(_active_note, _note_level); // parameters are set in sequencer
-      
     	IEC60601_GenerateMultiTone (&_Waves[_active_note][0]);    // parameters set in sequencer
     }            
 
@@ -444,20 +315,7 @@ void IEC60601_TimerInteruptHandler (void){
         SeqInt=1;  
 #endif  
         if (_sequence != 0) {
-            switch (_priority) {
-                 case HIGH:
-                	 IEC60601_HighPriSequence();
-                    break;
-                 case MEDIUM:
-                	 IEC60601_MedPriSequence();
-                    break;
-                 case LOW:
-                	 IEC60601_LowPriSequence();
-                    break;
-                case TEST:
-                	IEC60601_TestSequence();
-                    break;
-               }
+        	IEC60601_Sequence();
         }
         timeval = 0;            // clear interval counter
         _mscount++;             // increment ms counter
